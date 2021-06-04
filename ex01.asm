@@ -80,9 +80,10 @@ not_zero:
         pha
         inc counter
         lda counter
-        and #%11111111
+        and #%00111111
         bne next
-        inc increment
+        ; uncomment below line to add vertical scrolling 
+        ; inc increment
 next:   pla
 
         clc
