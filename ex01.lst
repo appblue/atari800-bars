@@ -1,0 +1,173 @@
+mads 2.1.3
+Source: ex01.asm
+     1 				        org $2000
+     2
+     3 				        .zpvar increment, counter .byte
+     4 				        .zpvar taddr_l, taddr_h .byte 
+     5
+     6
+     7 				start:
+     8 FFFF> 2000-2034> A9 00	        lda #<tab
+     9 2002 8D 2A 20		        sta taddr+1
+    10 2005 A9 30		        lda #>tab
+    11 2007 8D 2B 20		        sta taddr+2
+    12
+    13 200A A9 00		        lda #$00
+    14 200C 8D 2F 02		        sta $022f   ; 559          	22F          	SDMCTL
+    15 				                    ; Direct Memory Access (DMA) enable. POKEing with zero allows
+    16 				                    ; you to turn off ANTIC and speed up processing by 30%. Of
+    17 				                    ; course, it also means the screen goes blank when ANTIC is
+    18 				                    ; turned off! This is useful to speed things up when you are doing a
+    19 				                    ; calculation that would take a long time. It is also handy to turn off
+    20 				                    ; the screen when loading a drawing, then turning it on when the
+    21 				                    ; screen is loaded so that it appears instantly, complete on the
+    22 				                    ; screen. To use it you must first PEEK(559) and save the result in
+    23 				                    ; order to return your screen to you. Then POKE 559,0 to turn off
+    24 				                    ; ANTIC. When you are ready to bring the screen back to life,
+    25 				                    ; POKE 559 with the number saved earlier.
+    26 				                    ; 
+    27 				                    ; This location is the shadow register for 54272 ($D400), and the
+    28 				                    ; number you PEEKed above defines the playfield size, whether or
+    29 				                    ; not the missiles and players are enabled, and the player size
+    30 				                    ; resolution. To enable your options by using POKE 559, simply
+    31 				                    ; add up the values below to obtain the correct number to POKE
+    32 				                    ; into SDMCTL. Note that you must choose only one of the four
+    33 				                    ; playfield options appearing at the beginning of the list:
+    34 				                    ;
+    35 				                    ; Option                          Decimal   Bit
+    36 				                    ; No playfield                          0   0
+    37 				                    ; Narrow playfield                      1   0
+    38 				                    ; Standard playfield                    2   0,1
+    39 				                    ; Wide playfield                        3   0,1
+    40 				                    ; Enable missle DMA                     4   2
+    41 				                    ; Enable player DMA                     8   3
+    42 				                    ; Enable player and missile
+    43 				                    ;   DMA                                12   2,3
+    44 				                    ; One line player resolution           16   4
+    45 				                    ; Enable instructions to fetch
+    46 				                    ;   DMA                                32   5 (see below)
+    47 				                    ;
+    48 				                    ; Note that two-line player resolution is the default and that it is not
+    49 				                    ; necessary to add a value to 559 to obtain it. I have included the
+    50 				                    ; appropriate bits affected in the table above. The default is 34
+    51 				                    ; ($22).
+    52 				                    ;
+    53 				                    ; The playfield is the area of the TV screen you will use for display,
+    54 				                    ; text, and graphics. Narrow playfield is 128 color clocks (32
+    55 				                    ; characters wide in GR.0), standard playfield is 160 color clocks
+    56 				                    ; (40 characters), and wide playfield is 192 color clocks wide (48
+    57 				                    ; characters). A color clock is a physical measure of horizontal
+    58 				                    ; distance on the TV screen. There are a total of 228 color clocks on
+    59 				                    ; a line, but only some of these (usually 176 maximum) will be
+    60 				                    ; visible due to screen limitations. A pixel, on the other hand, is a
+    61 				                    ; logical unit which varies in size with the GRAPHICS mode. Due
+    62 				                    ; to the limitations of most TV sets, you will not be able to see all of
+    63 				                    ; the wide playfield unless you scroll into the offscreen portions.
+    64 				                    ; BIT 5 must be set to enable ANTIC operation; it enables DMA for
+    65 				                    ; fetching the display list instructions.
+    66 				    
+    67 200F A2 00		        ldx #$00
+    68 2011			loop:
+    69 2011 AD 0B D4		        lda $d40b   ; 54283          	D40B          	VCOUNT
+    70 				                    ; (R) Vertical line counter. Used to keep track of which line is
+    71 				                    ; currently being generated on the screen. Used during Display
+    72 				                    ; List Interrupts to change color or graphics modes. PEEKing here
+    73 				                    ; returns the line count divided by two, ranging from zero to 130
+    74 				                    ; ($82; zero to 155 on the PAL system; see 53268; $D014) for the
+    75 				                    ; 262 lines per TV frame.
+    76
+    77 2014 D0 03		        bne not_zero ; jump if not in 2 first lines on the screen
+    78 2016 EE 2A 20		        inc taddr+1  ; on line zero, 
+    79 2019			not_zero:
+    80 2019 48			        pha
+    81 201A E6 81		        inc counter
+    82 201C A5 81		        lda counter
+    83 201E 29 FF		        and #%11111111
+    84 2020 D0 02		        bne next
+    85 2022 E6 80		        inc increment
+    86 2024 68			next:   pla
+    87
+    88 2025 18			        clc
+    89 2026 65 80		        adc increment
+    90
+    91 2028 AA			        tax
+    92 2029 7D 00 30		taddr:  adc tab,x
+    93
+    94 202C 8D 0A D4		        sta $d40a   ;54282          	D40A          	WSYNC
+    95
+    96 				                    ;(W) Wait for horizontal synchronization. Allows the OS to
+    97 				                    ;synchronize the vertical TV display by causing the 6502 to halt
+    98 				                    ;and restart seven machine cycles before the beginning of the
+    99 				                    ;next TV line. It is used to synchronize the VBI's or DLI's with the
+   100 				                    ;screen display.
+   101 				                    ;To see the effect of the WSYNC register, type in the second
+   102 				                    ;example of a Display List Interrupt at location 512. RUN it and
+   103 				                    ;observe that it causes a clean separation of the colors at the
+   104 				                    ;change boundary. Now change line 50 to:
+   105 				                    ;
+   106 				                    ;50  DATA 72,169,222,234,234,234,141,24,208,104,64
+   107 				                    ;
+   108 				                    ;This eliminates the WSYNC command. RUN it and see the
+   109 				                    ;difference in the boundary line.
+   110 				                    ;
+   111 				                    ;The keyboard handler sets WSYNC repeatedly while generating
+   112 				                    ;the keyboard click on the console speaker at 53279 ($D01F).
+   113 				                    ;When interrupts are generated during the WSYNC period, they
+   114 				                    ;get delayed by one scan line. To bypass this, examine the
+   115 				                    ;VCOUNT register below and delay the interrupt processing by
+   116 				                    ;one line when no WSYNC delay has occurred.
+   117
+   118
+   119
+   120 202F 8D 1A D0		        sta $d01a   ; 53274          	D01A          	COLBK
+   121 				                    ;  Color and luminance of the background (BAK).(712).
+   122
+   123 2032 4C 11 20		        jmp loop
+   124
+   125 = 0080			INCREMENT
+   125 = 0081			COUNTER
+   125 = 0082			TADDR_L
+   125 = 0083			TADDR_H
+   125 				        org $3000
+   126 3000			tab:
+   127 3000-31FF> 1E 1E 1F 1F +         .byte 30, 30, 31, 31, 32, 32, 33, 33, 34, 34, 35, 35, 36, 36, 37
+   128 300F 25 26 26 27 27 27 +         .byte 37, 38, 38, 39, 39, 39, 40, 40, 41, 41, 42, 42, 42, 43, 43
+   129 301E 2C 2C 2C 2D 2D 2D +         .byte 44, 44, 44, 45, 45, 45, 46, 46, 46, 46, 47, 47, 47, 47, 48
+   130 302D 30 30 30 31 31 31 +         .byte 48, 48, 48, 49, 49, 49, 49, 49, 49, 49, 50, 50, 50, 50, 50
+   131 303C 32 32 32 32 32 32 +         .byte 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 49, 49
+   132 304B 31 31 31 31 31 30 +         .byte 49, 49, 49, 49, 49, 48, 48, 48, 48, 47, 47, 47, 47, 46, 46
+   133 305A 2E 2E 2D 2D 2D 2C +         .byte 46, 46, 45, 45, 45, 44, 44, 44, 43, 43, 42, 42, 42, 41, 41
+   134 3069 28 28 27 27 27 26 +         .byte 40, 40, 39, 39, 39, 38, 38, 37, 37, 36, 36, 35, 35, 34, 34
+   135 3078 21 21 20 20 1F 1F +         .byte 33, 33, 32, 32, 31, 31, 30, 30, 30, 29, 29, 28, 28, 27, 27
+   136 3087 1A 1A 19 19 18 18 +         .byte 26, 26, 25, 25, 24, 24, 23, 23, 22, 22, 21, 21, 21, 20, 20
+   137 3096 13 13 12 12 12 11 +         .byte 19, 19, 18, 18, 18, 17, 17, 16, 16, 16, 15, 15, 15, 14, 14
+   138 30A5 0E 0E 0D 0D 0D 0D +         .byte 14, 14, 13, 13, 13, 13, 12, 12, 12, 12, 11, 11, 11, 11, 11
+   139 30B4 0B 0B 0A 0A 0A 0A +         .byte 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10
+   140 30C3 0A 0A 0A 0A 0A 0B +         .byte 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 12, 12, 12
+   141 30D2 0C 0D 0D 0D 0D 0E +         .byte 12, 13, 13, 13, 13, 14, 14, 14, 14, 15, 15, 15, 16, 16, 16
+   142 30E1 11 11 12 12 12 13 +         .byte 17, 17, 18, 18, 18, 19, 19, 20, 20, 21, 21, 21, 22, 22, 23
+   143 30F0 17 18 18 19 19 1A +         .byte 23, 24, 24, 25, 25, 26, 26, 27, 27, 28, 28, 29, 29, 30, 30
+   144 30FF 1E			        .byte 30
+   145
+   146 3100 1E 1E 1F 1F 20 20 +         .byte 30, 30, 31, 31, 32, 32, 33, 33, 34, 34, 35, 35, 36, 36, 37
+   147 310F 25 26 26 27 27 27 +         .byte 37, 38, 38, 39, 39, 39, 40, 40, 41, 41, 42, 42, 42, 43, 43
+   148 311E 2C 2C 2C 2D 2D 2D +         .byte 44, 44, 44, 45, 45, 45, 46, 46, 46, 46, 47, 47, 47, 47, 48
+   149 312D 30 30 30 31 31 31 +         .byte 48, 48, 48, 49, 49, 49, 49, 49, 49, 49, 50, 50, 50, 50, 50
+   150 313C 32 32 32 32 32 32 +         .byte 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 49, 49
+   151 314B 31 31 31 31 31 30 +         .byte 49, 49, 49, 49, 49, 48, 48, 48, 48, 47, 47, 47, 47, 46, 46
+   152 315A 2E 2E 2D 2D 2D 2C +         .byte 46, 46, 45, 45, 45, 44, 44, 44, 43, 43, 42, 42, 42, 41, 41
+   153 3169 28 28 27 27 27 26 +         .byte 40, 40, 39, 39, 39, 38, 38, 37, 37, 36, 36, 35, 35, 34, 34
+   154 3178 21 21 20 20 1F 1F +         .byte 33, 33, 32, 32, 31, 31, 30, 30, 30, 29, 29, 28, 28, 27, 27
+   155 3187 1A 1A 19 19 18 18 +         .byte 26, 26, 25, 25, 24, 24, 23, 23, 22, 22, 21, 21, 21, 20, 20
+   156 3196 13 13 12 12 12 11 +         .byte 19, 19, 18, 18, 18, 17, 17, 16, 16, 16, 15, 15, 15, 14, 14
+   157 31A5 0E 0E 0D 0D 0D 0D +         .byte 14, 14, 13, 13, 13, 13, 12, 12, 12, 12, 11, 11, 11, 11, 11
+   158 31B4 0B 0B 0A 0A 0A 0A +         .byte 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10
+   159 31C3 0A 0A 0A 0A 0A 0B +         .byte 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 12, 12, 12
+   160 31D2 0C 0D 0D 0D 0D 0E +         .byte 12, 13, 13, 13, 13, 14, 14, 14, 14, 15, 15, 15, 16, 16, 16
+   161 31E1 11 11 12 12 12 13 +         .byte 17, 17, 18, 18, 18, 19, 19, 20, 20, 21, 21, 21, 22, 22, 23
+   162 31F0 17 18 18 19 19 1A +         .byte 23, 24, 24, 25, 25, 26, 26, 27, 27, 28, 28, 29, 29, 30, 30
+   163 31FF 1E			        .byte 30
+   164
+   165 				; - - - - - - - - - - - - 
+   166 02E0-02E1> 00 20		        run start  
+   167 				; - - - - - - - - - - - - 
