@@ -1,9 +1,5 @@
         org $2000
 
-        .zpvar increment, counter .byte
-        .zpvar taddr_l, taddr_h .byte 
-
-
 start:
         lda #<tab
         sta taddr+1
@@ -77,17 +73,19 @@ loop:
         bne not_zero ; jump if not in 2 first lines on the screen
         inc taddr+1  ; on line zero, 
 not_zero:
-        pha
-        inc counter
-        lda counter
-        and #%00111111
-        bne next
-        ; uncomment below line to add vertical scrolling 
-        ; inc increment
-next:   pla
-
-        clc
-        adc increment
+; uncomment below lines to add vertical scrolling
+; - - - - - - - - - - - - - - - - - - - - - - - - 
+;         .zpvar increment, counter .byte
+;
+;         pha
+;         inc counter
+;         lda counter
+;         and #%01111111
+;         bne next
+;         inc increment
+; next:   pla
+;         clc
+;         adc increment
 
         tax
 taddr:  adc tab,x
@@ -115,8 +113,6 @@ taddr:  adc tab,x
                     ;get delayed by one scan line. To bypass this, examine the
                     ;VCOUNT register below and delay the interrupt processing by
                     ;one line when no WSYNC delay has occurred.
-
-
 
         sta $d01a   ; 53274          	D01A          	COLBK
                     ;  Color and luminance of the background (BAK).(712).
